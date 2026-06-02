@@ -1,6 +1,5 @@
 from PIL import Image
-import math
-
+import numpy as np
 def stitch_images(image_files, coordinates):
     """
     Stitch satellite images accounting for non-vertical trajectory.
@@ -23,7 +22,6 @@ def stitch_images(image_files, coordinates):
     # Use first image as reference (0, 0)
     ref_lat = coordinates[0]['center_lat']
     ref_lon = coordinates[0]['center_lon']
-    ref_alt = coordinates[0]['altitude_km']
     
     # Pixel size calculation (10m resolution from orbit.py)
     pixels_per_meter = 1 / 10.0  # 10m per pixel
@@ -44,10 +42,11 @@ def stitch_images(image_files, coordinates):
         
         # Convert degrees to meters
         # 1 degree latitude ≈ 111 km
-        dlat_m = dlat * 110000
+        dlat_m = dlat * 111000
         
         # 1 degree longitude ≈ 111 * cos(lat) km
-        dlon_m = dlon * 119000 * math.cos(math.radians(ref_lat))
+        dlon_m = dlon  *55000
+        
         
         # Convert meters to pixels (10m resolution)
         # Negate px_offset to stitch to the opposite side
@@ -101,8 +100,7 @@ if __name__ == "__main__":
             row = df_images[df_images['image_num'] == num].iloc[0]
             coordinates.append({
                 'center_lat': row['center_lat'],
-                'center_lon': row['center_lon'],
-                'altitude_km': row['altitude_km']
+                'center_lon': row['center_lon']
             })
         
         print(f"Found {len(image_files)} images to stitch")

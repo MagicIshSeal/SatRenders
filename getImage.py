@@ -2,9 +2,10 @@ import math
 import openeo
 from orbit import df_images
 import time
+
 def getImage(lat, lon, swath_km, num = 1):
     half_lat = (swath_km / 2) / 111.0
-    half_lon = (swath_km / 2) / (111.0 * math.cos(math.radians(lat)))
+    half_lon = ((swath_km*1.77) / 2) / (111.0 * math.cos(math.radians(lat)))
 
     bbox = {
         "west":  lon - half_lon,
@@ -26,28 +27,31 @@ def getImage(lat, lon, swath_km, num = 1):
 
     cube = cube.min_time()
     #cube = cube.resample_spatial(resolution=10, projection="EPSG:32631")
-    cube = cube.linear_scale_range(0, 4000, 0, 255)
+    cube = cube.linear_scale_range(0, 3000, 0, 255)
     try:
-        #cube.download(f"img/snapshot_{num}.png", format="PNG")
-        job = cube.create_job(format="PNG", title=f"snapshot_{num}")
+        cube.download(f"img/snapshot_{num}.png", format="PNG")
+        #job = cube.create_job(format="PNG", title=f"snapshot_{num}")
         print(f"Image {num} downloaded successfully.")
-        return job
+        #return job
     except Exception as e:
         print(f"Error downloading image {num}: {e}")
         return None
 
 
 if __name__ == "__main__":
-    j = 0
-    for i in df_images["image_num"]:
-        t1 = time.time()
-        row = df_images[df_images["image_num"] == i].iloc[0]
-        job = getImage(row["center_lat"], row["center_lon"], 12, num=i)
-        j = j + 1
-        if j > 1:
-            job.start_job()
-        print(f"Time taken for image {i}: {time.time() - t1:.2f} seconds")
-    # lat = 51.9968
+    try:
+        j = 0
+        for i in df_images["image_num"]:
+            t1 = time.time()
+            row = df_images[df_images["image_num"] == i].iloc[0]
+            getImage(row["center_lat"], row["center_lon"], row["swath_km"], num=i)
+            #j = j + 1
+            #if j > 1:
+            #    job.start_job()
+            print(f"Time taken for image {i}: {time.time() - t1:.2f} seconds")
+    except KeyboardInterrupt:
+        print("Process interrupted by user.")
+    # lat = 51.99680
     # lon = 4.3187
     # lat2 = 52.0588
     # lon2 = 4.2927

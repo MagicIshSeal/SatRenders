@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import math
-from orbit import df_images, df, haversine
+from orbit import df_images
 
 def create_flyby_video(stitched_image_path, output_video_path, speed_kmh=None, speed_ms=None, 
                        fps=30, viewport_width_pixels=None):
@@ -78,13 +78,14 @@ def create_flyby_video(stitched_image_path, output_video_path, speed_kmh=None, s
     
     # Calculate total distance along the trajectory
     total_distance_m = 0
-    for i in range(1, len(df)):
-        dist = haversine(
-            df.iloc[i-1]['lat'], df.iloc[i-1]['lon'],
-            df.iloc[i]['lat'], df.iloc[i]['lon']
-        ) * 1000  # Convert km to m
-        total_distance_m += dist
-    
+    for i in range(1, len(df_images)):
+        lat1 = df_images.iloc[i-1]['center_lat']
+        lon1 = df_images.iloc[i-1]['center_lon']
+        lat2 = df_images.iloc[i]['center_lat']
+        lon2 = df_images.iloc[i]['center_lon']
+        distance = np.sqrt((lat2 - lat1)**2 + (lon2 - lon1)**2) * 111.0
+        total_distance_m += distance * 1000  # Convert to meters
+
     # Calculate video duration and frame count
     duration_s = total_distance_m / speed_ms
     num_frames = int(duration_s * fps)
@@ -127,19 +128,18 @@ def create_flyby_video(stitched_image_path, output_video_path, speed_kmh=None, s
         # Normalize and scale to viewport offset (400 pixels)
         offset_distance = 400
         if distance > 0:
-            offset_px = int((dx / distance) * offset_distance)
+            offset_px = -int((dx / distance) * offset_distance)
             offset_py = int((dy / distance) * offset_distance)
         else:
-            offset_px = 0
-            offset_py = 400  # Default to right if at same position
+            offset_px = 400  # Default to right if at same position
         
         # Define the center of the viewport
         center_x = int(current_px)
         center_y = int(current_py)
         
         # Calculate the top-left corner of the viewport with dynamic offset based on direction
-        x_start = center_x - viewport_height // 2 + offset_px
-        y_start = center_y - viewport_width_pixels // 2 + offset_py
+        x_start = center_x - viewport_height // 2 
+        y_start = center_y - viewport_width_pixels // 2
         
         # Extract viewport from image with bounds checking
         viewport = np.zeros((viewport_height, viewport_width_pixels, img_array.shape[2]), dtype=np.uint8)
@@ -173,8 +173,8 @@ if __name__ == "__main__":
             stitched_image_path="img/stitched.png",
             output_video_path="img/flyby_video.mp4",
             speed_kmh=25200,  # ~7.5 km/s converted to km/h
-            fps=15,
-            viewport_width_pixels=800  # 8km viewport
+            fps=60,
+            viewport_width_pixels=1600  # 8km viewport
         )
     except Exception as e:
         print(f"Error creating video: {e}")
