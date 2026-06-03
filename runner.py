@@ -4,6 +4,7 @@ from stitchImage import runStitch
 from createVideo import create_flyby_video
 import argparse
 import time
+import os
 
 DEFAULT_LAT, DEFAULT_LON = 51.9973, 4.368927  # Default target location (can be overridden by user input)
 DEFAULT_SWATH_KM = 12
@@ -40,7 +41,7 @@ if __name__ == "__main__":
         
         runStitch(df_images)
         
-        create_flyby_video(
+        create_flyby_video(df_images,
             stitched_image_path="img/stitched.png",
             output_video_path=args.output,
             speed_ms=args.speed_ms,

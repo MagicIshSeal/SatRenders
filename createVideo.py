@@ -2,8 +2,11 @@ import cv2
 import numpy as np
 from PIL import Image
 import math
+from orbit import getdfImages, TARGET_LAT, TARGET_LON, inc, km_lead, km_trail, swath_km
 
-def toPx(lat, lon, img_width, img_height, ref_lat=None, ref_lon=None, min_x=None, min_y=None, padding=0):
+
+
+def toPx(df_images, lat, lon, img_width, img_height, ref_lat=None, ref_lon=None, min_x=None, min_y=None, padding=0):
     """
     Convert lat/lon to pixel coordinates in the stitched image.
     Uses the same coordinate system as stitch_images.
@@ -39,7 +42,7 @@ def toPx(lat, lon, img_width, img_height, ref_lat=None, ref_lon=None, min_x=None
     
     return py_offset, px_offset
 
-def create_flyby_video(stitched_image_path, output_video_path, speed_kmh=None, speed_ms=None, 
+def create_flyby_video(df_images, stitched_image_path, output_video_path, speed_kmh=None, speed_ms=None, 
                        fps=30, viewport_width=800, viewport_height=600):
 
     if speed_kmh is None and speed_ms is None:
@@ -91,8 +94,8 @@ def create_flyby_video(stitched_image_path, output_video_path, speed_kmh=None, s
     first_lat, first_lon = first_image['center_lat'], first_image['center_lon']
     last_lat, last_lon = last_image['center_lat'], last_image['center_lon']
     
-    first_x, first_y = toPx(first_lat, first_lon, img_width, img_height, ref_lat, ref_lon, min_x, min_y)
-    last_x, last_y = toPx(last_lat, last_lon, img_width, img_height, ref_lat, ref_lon, min_x, min_y)
+    first_x, first_y = toPx(df_images, first_lat, first_lon, img_width, img_height, ref_lat, ref_lon, min_x, min_y)
+    last_x, last_y = toPx(df_images, last_lat, last_lon, img_width, img_height, ref_lat, ref_lon, min_x, min_y)
     
     # Add image size offset to get the actual center (toPx returns top-left corner)
     first_x += img_size // 2
@@ -147,6 +150,7 @@ if __name__ == "__main__":
     try:
         # Create a simple flyby video with straight-line motion
         create_flyby_video(
+            df_images=getdfImages(TARGET_LAT, TARGET_LON, inc, km_lead=km_lead, km_trail=km_trail, swath_km=swath_km),
             stitched_image_path="img/stitched.png",
             output_video_path="img/flyby_video.mp4",
             speed_ms=7.5*1000,  # ~7.5 km/s converted to km/h
