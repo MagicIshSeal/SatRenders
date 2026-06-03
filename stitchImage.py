@@ -1,6 +1,6 @@
 from PIL import Image
 import numpy as np
-
+import os
 def stitch_images(image_files, coordinates):
     """
     Stitch satellite images accounting for non-vertical trajectory.

@@ -1,0 +1,1 @@
+This folder is for results as it will be allowed by the .gitignore
