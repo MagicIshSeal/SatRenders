@@ -1,7 +1,7 @@
 import math
 import openeo
-from orbit import df_images
 import time
+from orbit import getdfImages, TARGET_LAT, TARGET_LON, inc, km_lead, km_trail, swath_km
 
 def getImage(lat, lon, swath_km, num = 1):
     half_lat = (swath_km / 2) / 111.0
@@ -40,17 +40,15 @@ def getImage(lat, lon, swath_km, num = 1):
 
 if __name__ == "__main__":
     try:
-        j = 0
+        df_images = getdfImages(TARGET_LAT, TARGET_LON, inc, km_lead=20, km_trail=10, swath_km=swath_km)
         for i in df_images["image_num"]:
             t1 = time.time()
             row = df_images[df_images["image_num"] == i].iloc[0]
             getImage(row["center_lat"], row["center_lon"], row["swath_km"], num=i)
-            #j = j + 1
-            #if j > 1:
-            #    job.start_job()
-            print(f"Time taken for image {i}: {time.time() - t1:.2f} seconds")
+            print(f"\nTime taken for image {i}: {time.time() - t1:.2f} seconds")
+        print("\nAll images downloaded successfully.")
     except KeyboardInterrupt:
-        print("Process interrupted by user.")
+        print("\nProcess interrupted by user.")
     # lat = 51.99680
     # lon = 4.3187
     # lat2 = 52.0588

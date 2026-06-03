@@ -1,5 +1,6 @@
 from PIL import Image
 import numpy as np
+
 def stitch_images(image_files, coordinates):
     """
     Stitch satellite images accounting for non-vertical trajectory.
@@ -65,7 +66,7 @@ def stitch_images(image_files, coordinates):
     canvas_width = max_y - min_y
     
     # Create canvas (add some padding)
-    padding = 50
+    padding = 0
     canvas = Image.new("RGB", (canvas_width + 2*padding, canvas_height + 2*padding), color=(0, 0, 0))
     
     # Paste each image at its calculated position
@@ -77,6 +78,38 @@ def stitch_images(image_files, coordinates):
     
     return canvas
 
+def runStitch(df_images):
+    # Get image numbers from df_images
+        image_nums = sorted(df_images['image_num'].tolist())
+        
+        # Build list of image files
+        image_files = [f"img/snapshot_{int(num)}.png" for num in image_nums]
+        
+        # Check if all images exist
+        missing_files = [f for f in image_files if not os.path.exists(f)]
+        if missing_files:
+            print(f"Warning: Missing files: {missing_files}")
+        
+        # Build coordinates list from df_images, maintaining the order
+        coordinates = []
+        for num in image_nums:
+            row = df_images[df_images['image_num'] == num].iloc[0]
+            coordinates.append({
+                'center_lat': row['center_lat'],
+                'center_lon': row['center_lon']
+            })
+        
+        print(f"Found {len(image_files)} images to stitch")
+        print(f"Image files: {image_files}")
+        print(f"Coordinates:")
+        for i, coord in enumerate(coordinates):
+            print(f"  Image {i+1}: Lat {coord['center_lat']:.4f}°N, Lon {coord['center_lon']:.4f}°E")
+        
+        # Stitch the images
+        stitched = stitch_images(image_files, coordinates)
+        stitched.save("img/stitched.png")
+        print(f"\nStitched image saved: img/stitched.png")
+        print(f"Canvas size: {stitched.size}")
 
 if __name__ == "__main__":
     import os

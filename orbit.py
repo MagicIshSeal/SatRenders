@@ -67,20 +67,21 @@ def plotPositions(lats, lons, swath_km=8, square_km=12):
     plt.grid()
     plt.show()
     
-
-LAT_START, LON_START = findRel(TARGET_LAT, TARGET_LON, inc, -km_lead)
-LAT_END, LON_END = findRel(TARGET_LAT, TARGET_LON, inc, km_trail)
-lats, lons = getPositions(LAT_START, LON_START, LAT_END, LON_END, swath_km=swath_km)
-print(f"Start: ({LAT_START:.6f}, {LON_START:.6f}), End: ({LAT_END:.6f}, {LON_END:.6f}), Total distance: {np.sqrt((LAT_END - LAT_START)**2 + (LON_END - LON_START)**2) * 111.0:.2f} km")
-print(f"Number of images: {len(lats)}")
-df_images = pd.DataFrame({
-    'image_num': range(1, len(lats)+1),
-    'center_lat': lats,
-    'center_lon': lons,
-    'swath_km': swath_km
-})
+def getdfImages(TARGET_LAT, TARGET_LON, INC, km_lead, km_trail, swath_km):
+    LAT_START, LON_START = findRel(TARGET_LAT, TARGET_LON, inc, -km_lead)
+    LAT_END, LON_END = findRel(TARGET_LAT, TARGET_LON, inc, km_trail)
+    lats, lons = getPositions(LAT_START, LON_START, LAT_END, LON_END, swath_km=swath_km)
+    print(f"Start: ({LAT_START:.6f}, {LON_START:.6f}), End: ({LAT_END:.6f}, {LON_END:.6f}), Total distance: {np.sqrt((LAT_END - LAT_START)**2 + (LON_END - LON_START)**2) * 111.0:.2f} km")
+    print(f"Number of images: {len(lats)}")
+    df_images = pd.DataFrame({
+        'image_num': range(1, len(lats)+1),
+        'center_lat': lats,
+        'center_lon': lons,
+        'swath_km': swath_km
+    })
+    return df_images
 
 if __name__ == "__main__":
-    plotPositions(lats, lons, swath_km=swath_km, square_km=8)
-    print(df_images)
+    df_images = getdfImages(TARGET_LAT, TARGET_LON, inc, km_lead, km_trail, swath_km)
+    plotPositions(df_images['center_lat'], df_images['center_lon'], swath_km=swath_km, square_km=8)
   

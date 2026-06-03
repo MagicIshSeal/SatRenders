@@ -2,25 +2,46 @@ import cv2
 import numpy as np
 from PIL import Image
 import math
-from orbit import df_images
+
+def toPx(lat, lon, img_width, img_height, ref_lat=None, ref_lon=None, min_x=None, min_y=None, padding=0):
+    """
+    Convert lat/lon to pixel coordinates in the stitched image.
+    Uses the same coordinate system as stitch_images.
+    """
+    if ref_lat is None:
+        ref_lat = df_images.iloc[0]['center_lat']
+    if ref_lon is None:
+        ref_lon = df_images.iloc[0]['center_lon']
+    
+    # Calculate displacement from reference in degrees
+    dlat = lat - ref_lat
+    dlon = lon - ref_lon
+    
+    # Convert degrees to meters
+    # 1 degree latitude ≈ 111 km
+    dlat_m = dlat * 111000
+    
+    # 1 degree longitude ≈ 111 * cos(lat) km (using ~55km for approximation at typical latitude)
+    dlon_m = dlon * 55000
+    
+    # Pixel size calculation (10m resolution)
+    pixels_per_meter = 1 / 10.0
+    
+    # Convert meters to pixels
+    px_offset = -int(dlat_m * pixels_per_meter)
+    py_offset = int(dlon_m * pixels_per_meter)
+    
+    # If min_x and min_y are provided, adjust for canvas offset (from stitching)
+    if min_x is not None:
+        px_offset = px_offset - min_x + padding
+    if min_y is not None:
+        py_offset = py_offset - min_y + padding
+    
+    return py_offset, px_offset
 
 def create_flyby_video(stitched_image_path, output_video_path, speed_kmh=None, speed_ms=None, 
-                       fps=30, viewport_width_pixels=None):
-    """
-    Create a video simulating the satellite flyby over the stitched image.
-    Pans from bottom to top following the diagonal trajectory line.
-    
-    Args:
-        stitched_image_path: Path to the stitched satellite image
-        output_video_path: Output video file path
-        speed_kmh: Speed in km/h (alternatively use speed_ms)
-        speed_ms: Speed in m/s (alternatively use speed_kmh)
-        fps: Frames per second for the video
-        viewport_width_pixels: Width of the viewport in pixels (default: 800 pixels = 8km)
-    
-    The video pans from bottom to top, staying centered on the trajectory.
-    """
-    
+                       fps=30, viewport_width=800, viewport_height=600):
+
     if speed_kmh is None and speed_ms is None:
         raise ValueError("Must specify either speed_kmh or speed_ms")
     
@@ -32,134 +53,90 @@ def create_flyby_video(stitched_image_path, output_video_path, speed_kmh=None, s
     img_array = np.array(img)
     img_height, img_width = img_array.shape[:2]
     
-    # Default viewport width is 8km (same as one image swath)
-    if viewport_width_pixels is None:
-        viewport_width_pixels = 800  # 8km at 10m/pixel resolution
+    # Calculate canvas offsets (same as in stitchImage.py)
+    # Get reference position (first image)
+    ref_lat = df_images.iloc[0]['center_lat']
+    ref_lon = df_images.iloc[0]['center_lon']
     
-    viewport_height = viewport_width_pixels  # Square viewport
+    # Pixel size calculation (10m resolution)
+    pixels_per_meter = 1 / 10.0
+    img_size = 512  # Assuming square images
+    
+    # Calculate positions for all images to get min_x, min_y
+    positions = []
+    for idx, row in df_images.iterrows():
+        lat = row['center_lat']
+        lon = row['center_lon']
+        
+        dlat = lat - ref_lat
+        dlon = lon - ref_lon
+        
+        dlat_m = dlat * 111000
+        dlon_m = dlon * 55000
+        
+        px_offset = -int(dlat_m * pixels_per_meter)
+        py_offset = int(dlon_m * pixels_per_meter)
+        
+        positions.append((px_offset, py_offset))
+    
+    min_x = min(p[0] for p in positions)
+    min_y = min(p[1] for p in positions)
     
     # Get the center positions of first and last images
     first_image = df_images.iloc[0]
     last_image = df_images.iloc[-1]
     
+    out = cv2.VideoWriter(output_video_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (viewport_width, viewport_height))
+    
     first_lat, first_lon = first_image['center_lat'], first_image['center_lon']
     last_lat, last_lon = last_image['center_lat'], last_image['center_lon']
     
-    # Reference point for coordinate conversion
-    ref_lat = first_lat
-    ref_lon = first_lon
+    first_x, first_y = toPx(first_lat, first_lon, img_width, img_height, ref_lat, ref_lon, min_x, min_y)
+    last_x, last_y = toPx(last_lat, last_lon, img_width, img_height, ref_lat, ref_lon, min_x, min_y)
     
-    # Convert lat/lon to pixel positions
-    def latlon_to_pixels(lat, lon, ref_lat, ref_lon):
-        dlat = lat - ref_lat
-        dlon = lon - ref_lon
-        
-        dlat_m = dlat * 111000
-        dlon_m = -dlon * 111000 * math.cos(math.radians(ref_lat))
-        
-        pixels_per_meter = 1 / 10.0
-        px = int(dlat_m * pixels_per_meter)
-        py = int(dlon_m * pixels_per_meter)
-        
-        return px, py
+    # Add image size offset to get the actual center (toPx returns top-left corner)
+    first_x += img_size // 2
+    first_y += img_size // 2
+    last_x += img_size // 2
+    last_y += img_size // 2
+    distance_px = math.sqrt((last_x - first_x) ** 2 + (last_y - first_y) ** 2)
+    distance_m = distance_px * 10  # Assuming 1 pixel = 10 meters for simplicity
+    total_time_s = distance_m / speed_ms
+    total_frames = int(total_time_s * fps)
     
-    # Get pixel positions of first and last image centers
-    first_px, first_py = latlon_to_pixels(first_lat, first_lon, ref_lat, ref_lon)
-    last_px, last_py = latlon_to_pixels(last_lat, last_lon, ref_lat, ref_lon)
-    
-    # Pre-compute pixel positions for all image centers
-    image_centers_px = []
-    for idx, row in df_images.iterrows():
-        px, py = latlon_to_pixels(row['center_lat'], row['center_lon'], ref_lat, ref_lon)
-        image_centers_px.append((px, py))
-    
-    print(f"First image center: ({first_px}, {first_py}) pixels")
-    print(f"Last image center: ({last_px}, {last_py}) pixels")
-    
-    # Calculate total distance along the trajectory
-    total_distance_m = 0
-    for i in range(1, len(df_images)):
-        lat1 = df_images.iloc[i-1]['center_lat']
-        lon1 = df_images.iloc[i-1]['center_lon']
-        lat2 = df_images.iloc[i]['center_lat']
-        lon2 = df_images.iloc[i]['center_lon']
-        distance = np.sqrt((lat2 - lat1)**2 + (lon2 - lon1)**2) * 111.0
-        total_distance_m += distance * 1000  # Convert to meters
-
-    # Calculate video duration and frame count
-    duration_s = total_distance_m / speed_ms
-    num_frames = int(duration_s * fps)
-    
-    print(f"Creating video:")
-    print(f"  Image size: {img_width} x {img_height} pixels")
-    print(f"  Viewport: {viewport_width_pixels} x {viewport_height} pixels")
-    print(f"  Speed: {speed_ms:.1f} m/s ({speed_ms * 3.6:.1f} km/h)")
-    print(f"  Total distance: {total_distance_m/1000:.2f} km")
-    print(f"  Duration: {duration_s:.1f} seconds")
-    print(f"  Frames: {num_frames}")
-    
-    # Initialize video writer
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_video_path, fourcc, fps, (viewport_width_pixels, viewport_height))
-    
-    # Create video frames
-    for frame_num in range(num_frames):
-        # Calculate current position along the trajectory (1 to 0 for bottom-to-top)
-        progress = 1.0 - (frame_num / max(1, num_frames - 1) if num_frames > 1 else 0)
+    for frame in range(total_frames):
+        t = frame / total_frames
+        current_x = int(first_x + t * (last_x - first_x))
+        current_y = int(first_y + t * (last_y - first_y))
         
-        # Interpolate position along the diagonal line
-        current_px = first_px + (last_px - first_px) * progress
-        current_py = first_py + (last_py - first_py) * progress
+        # Extract viewport region centered at current position
+        # Define desired viewport bounds (offset to the right by half viewport width)
+        vp_left = current_x
+        vp_top = current_y - viewport_height // 2
+        vp_right = vp_left + viewport_width
+        vp_bottom = vp_top + viewport_height
         
-        # Determine which image center to look towards
-        # Calculate which image we're closest to in the timeline
-        progress_from_start = 1.0 - progress
-        image_index = min(int(progress_from_start * (len(image_centers_px) - 1) + 0.5), len(image_centers_px) - 1)
+        # Clip to image bounds
+        src_left = max(0, vp_left)
+        src_top = max(0, vp_top)
+        src_right = min(img_width, vp_right)
+        src_bottom = min(img_height, vp_bottom)
         
-        # Use the next image center if available, otherwise use current
-        next_image_index = min(image_index + 1, len(image_centers_px) - 1)
-        target_px, target_py = image_centers_px[next_image_index]
+        # Calculate where to place the extracted region in the viewport
+        dst_left = src_left - vp_left
+        dst_top = src_top - vp_top
+        dst_right = dst_left + (src_right - src_left)
+        dst_bottom = dst_top + (src_bottom - src_top)
         
-        # Calculate direction from current position to target image center
-        dx = target_px - current_px
-        dy = target_py - current_py
-        distance = math.sqrt(dx**2 + dy**2)
+        # Handle boundary cases - pad with black if needed
+        viewport = np.zeros((viewport_height, viewport_width, 3), dtype=np.uint8)
         
-        # Normalize and scale to viewport offset (400 pixels)
-        offset_distance = 400
-        if distance > 0:
-            offset_px = -int((dx / distance) * offset_distance)
-            offset_py = int((dy / distance) * offset_distance)
-        else:
-            offset_px = 400  # Default to right if at same position
+        # Copy the extracted region (handle all 3 channels)
+        viewport[dst_top:dst_bottom, dst_left:dst_right, :] = img_array[src_top:src_bottom, src_left:src_right, :]
         
-        # Define the center of the viewport
-        center_x = int(current_px)
-        center_y = int(current_py)
-        
-        # Calculate the top-left corner of the viewport with dynamic offset based on direction
-        x_start = center_x - viewport_height // 2 
-        y_start = center_y - viewport_width_pixels // 2
-        
-        # Extract viewport from image with bounds checking
-        viewport = np.zeros((viewport_height, viewport_width_pixels, img_array.shape[2]), dtype=np.uint8)
-        
-        for dy in range(viewport_height):
-            for dx in range(viewport_width_pixels):
-                img_y = x_start + dy
-                img_x = y_start + dx
-                
-                if 0 <= img_y < img_height and 0 <= img_x < img_width:
-                    viewport[dy, dx] = img_array[img_y, img_x]
-        
-        # Convert RGB to BGR for OpenCV
         viewport_bgr = cv2.cvtColor(viewport.astype(np.uint8), cv2.COLOR_RGB2BGR)
-        
-        # Write frame
         out.write(viewport_bgr)
-        
-        if (frame_num + 1) % max(1, num_frames // 10) == 0:
-            print(f"  Frame {frame_num + 1}/{num_frames}")
+        print(f"Frame {frame+1}/{total_frames} - Position: ({current_x}, {current_y})")
     
     out.release()
     print(f"Video saved: {output_video_path}")
@@ -168,13 +145,15 @@ def create_flyby_video(stitched_image_path, output_video_path, speed_kmh=None, s
 if __name__ == "__main__":
     # Example usage
     try:
-        # Create a flyby video at realistic satellite speed
+        # Create a simple flyby video with straight-line motion
         create_flyby_video(
             stitched_image_path="img/stitched.png",
             output_video_path="img/flyby_video.mp4",
             speed_kmh=25200,  # ~7.5 km/s converted to km/h
             fps=60,
-            viewport_width_pixels=1600  # 8km viewport
+            viewport_width=1920,   # Width in pixels
+            viewport_height=1080    # Height in pixels
+            #9:16 aspect ratio for vertical video (e.g., 1080x1920)
         )
     except Exception as e:
         print(f"Error creating video: {e}")
