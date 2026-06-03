@@ -149,7 +149,7 @@ if __name__ == "__main__":
         create_flyby_video(
             stitched_image_path="img/stitched.png",
             output_video_path="img/flyby_video.mp4",
-            speed_kmh=25200,  # ~7.5 km/s converted to km/h
+            speed_ms=7.5*1000,  # ~7.5 km/s converted to km/h
             fps=60,
             viewport_width=1920,   # Width in pixels
             viewport_height=1080    # Height in pixels

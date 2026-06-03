@@ -7,7 +7,7 @@ import time
 
 DEFAULT_LAT, DEFAULT_LON = 51.9973, 4.368927  # Default target location (can be overridden by user input)
 DEFAULT_SWATH_KM = 12
-DEFAULT_SPEED_KMS = 7.5 #km/s
+DEFAULT_SPEED_KMS = 7.5*1000 #km/s
 DEFAULT_FPS = 60
 DEFAULT_VIEWPORT_WIDTH = 1920
 DEFAULT_VIEWPORT_HEIGHT = 1080
@@ -21,7 +21,7 @@ if __name__ == "__main__":
     parser.add_argument("--swath-km", type=float, default=DEFAULT_SWATH_KM, help="Swath width in km")
     parser.add_argument("--lead-km", type=float, default=20, help="Lead distance in km")
     parser.add_argument("--trail-km", type=float, default=10, help="Trail distance in km")
-    parser.add_argument("--speed-kmh", type=float, default=DEFAULT_SPEED_KMS, help="Speed in km/s")
+    parser.add_argument("--speed-ms", type=float, default=DEFAULT_SPEED_KMS, help="Speed in km/s")
     parser.add_argument("--fps", type=int, default=DEFAULT_FPS, help="Video FPS")
     parser.add_argument("--width", type=int, default=DEFAULT_VIEWPORT_WIDTH, help="Viewport width")
     parser.add_argument("--height", type=int, default=DEFAULT_VIEWPORT_HEIGHT, help="Viewport height")
@@ -43,7 +43,7 @@ if __name__ == "__main__":
         create_flyby_video(
             stitched_image_path="img/stitched.png",
             output_video_path=args.output,
-            speed_kmh=args.speed_kmh,
+            speed_ms=args.speed_ms,
             fps=args.fps,
             viewport_width=args.width,
             viewport_height=args.height
